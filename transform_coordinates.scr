@@ -1,0 +1,65 @@
+(vl-load-com)
+
+;;; ==========================================================================
+;;; AUTOCAD BATCH TRANSFORM SCRIPT (Move & Rotate)
+;;; Description: Moves drawing from large map coordinates to Origin (0,0,0)
+;;;              and rotates it to align with the project grid.
+;;;              Automatically handles Unit scaling (Meters vs Millimeters).
+;;; ==========================================================================
+
+;;; 1. PREPARE LAYERS
+;;; Unlock, Thaw, and Turn On all layers to ensure all objects are moved.
+(command "_.LAYER" "_ON" "*" "_THAW" "*" "_UNLOCK" "*" "")
+
+;;; 2. SOURCE COORDINATES (IN METERS)
+;;; Define the current map coordinates where the drawing is located.
+;;; NOTE: Always enter these as METERS. The script handles scaling.
+(setq mapX 3456500.0)
+(setq mapY 7335600.0)
+
+;;; 3. CHECK DRAWING UNITS (INSUNITS)
+;;; 4 = Millimeters, 6 = Meters
+(setq units (getvar "INSUNITS"))
+
+(if (= units 4)
+  (progn
+    ;; Case: MILLIMETERS (4) -> Scale map coordinates by 1000
+    (setq rawX (* mapX 1000.0))
+    (setq rawY (* mapY 1000.0))
+    (princ "\n*** UNITS: MILLIMETERS -> COORDINATES SCALED BY 1000 ***")
+  )
+  (progn
+    ;; Case: METERS (6) or Undefined -> Keep coordinates as is
+    (setq rawX mapX)
+    (setq rawY mapY)
+    (princ "\n*** UNITS: METERS (OR OTHER) -> NO SCALING APPLIED ***")
+  )
+)
+
+;;; 4. SCIENTIFIC NOTATION FIX
+;;; Large coordinates (billions) are converted to "e+09" by AutoLISP default.
+;;; We force them into full decimal strings to ensure the MOVE command accepts them.
+(setq strX (rtos rawX 2 2))
+(setq strY (rtos rawY 2 2))
+(setq pointString (strcat strX "," strY ",0.0"))
+
+;;; 5. MOVE OPERATION
+;;; Move objects from the calculated source point to World Origin (0,0,0)
+(command "_.MOVE" "_ALL" "" pointString "0,0,0")
+
+;;; 6. ROTATE OPERATION
+;;; Rotate everything around the Origin by -15 degrees
+(command "_.ROTATE" "_ALL" "" "0,0,0" "-15")
+
+;;; 7. CLEANUP AND SAVE
+;;; Reset UCS to World and Zoom Extents
+(command "_.UCS" "_World")
+(command "_.ZOOM" "_E")
+
+;;; Check if modifications occurred before saving
+(if (= (getvar "DBMOD") 0)
+  (princ "\n*** NO CHANGES DETECTED ***")
+  (command "_.QSAVE")
+)
+
+(princ "\n*** SCRIPT EXECUTION FINISHED ***")
